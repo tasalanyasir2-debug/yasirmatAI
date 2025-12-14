@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>yasirmat.AI – Akıllı Sohbet & Oyun Botu</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body{margin:0;font-family:Arial;background:#0f172a;color:white;height:100vh;display:flex;flex-direction:column}
+    #header{padding:14px;background:#020617;font-size:20px;font-weight:bold;text-align:center}
+    #status{font-size:12px;text-align:center;padding:6px;background:#020617;color:#22c55e}
+    #messages{flex:1;padding:16px;overflow-y:auto}
+    .msg{margin-bottom:10px}
+    .user{color:#38bdf8}
+    .ai{color:#a7f3d0}
+    #inputArea{display:flex;padding:12px;background:#020617}
+    #input{flex:1;padding:10px;font-size:16px;border-radius:6px;border:none}
+    #send{margin-left:10px;padding:10px 18px;font-weight:bold;border:none;border-radius:6px;cursor:pointer}
+    #gameCanvas{border:2px solid #fff;margin-top:10px;display:none;}
+    #drawingCanvas{border:2px solid #fff;margin-top:10px;display:none;}
+  </style>
+</head>
+<body>
+<div id="header">🤖 yasirmat.AI</div>
+<div id="status">Durum: %100 Offline – fetch / backend kullanılmıyor</div>
+<div id="messages"></div>
+<canvas id="gameCanvas" width="300" height="300"></canvas>
+<canvas id="drawingCanvas" width="300" height="300"></canvas>
+<div id="inputArea">
+  <input id="input" placeholder="Bir şey sor (2+2, yazı tura, espri yap, bulmaca…)"> 
+  <button id="send">Gönder</button>
+</div>
+<script>
+const input = document.getElementById('input');
+const send = document.getElementById('send');
+const messages = document.getElementById('messages');
+const gameCanvas = document.getElementById('gameCanvas');
+const drawingCanvas = document.getElementById('drawingCanvas');
+const gameCtx = gameCanvas.getContext('2d');
+const drawCtx = drawingCanvas.getContext('2d');
+
+function loadMessages(){
+  const msgs = JSON.parse(localStorage.getItem('chatMessages')||'[]');
+  msgs.forEach(m=>addMsg(m.text,m.cls,false));
+}
+function saveMessage(text,cls){
+  const msgs = JSON.parse(localStorage.getItem('chatMessages')||'[]');
+  msgs.push({text,cls});
+  localStorage.setItem('chatMessages',JSON.stringify(msgs));
+}
+function clearMessages(){
+  messages.innerHTML='';
+  localStorage.removeItem('chatMessages');
+}
+function addMsg(text, cls, save=true){
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = text;
+  messages.appendChild(d);
+  messages.scrollTop = messages.scrollHeight;
+  if(save) saveMessage(text,cls);
+}
+
+send.addEventListener('click', sendMsg);
+input.addEventListener('keydown', e => { if(e.key==='Enter') sendMsg(); });
+
+const jokes=['Bilgisayar neden üşür? Çünkü Windows açık 😄','Programcı neden denize girmez? Çünkü cache’lenir 🏊‍♂️','0 neden 8’den korkar? Çünkü 8, 0’ı byte 😂','Kahve neden bilgisayarın yanında olmalı? Çünkü kodu çözmek için Java gerekir ☕','Elektronik devre neden mutluymuş? Çünkü her şeyi bağlamış 😆','Web sitesi neden yorulmuş? Çünkü sürekli refresh yapıyormuş 😅','Neden ekonomi dersi önce öğreniliyor? Çünkü sonra ders akıyor 😉','Recep Tayyip Erdoğan ile espri: "Tamam, önce ekonomi dersimizi öğrenelim, sonra espri geliyor 😄"'];
+const puzzles=['Bir şey her zaman yükselir ama asla yere düşmez, nedir? (Cevap: Yaş) ','İki uçtan bağlanan, ortası görünmeyen şey nedir? (Cevap: Halı) ','Dairesel bir yapıya sahip, dönerek ilerleyen şey nedir? (Cevap: Tekerlek) '];
+
+function safeMath(expr){
+  let e=expr.toLowerCase().replace(/nedir|kaç|sonuç|hesapla|=|\?/g,'').replace(/artı/g,'+').replace(/eksi/g,'-').replace(/çarpı|kere|x/g,'*').replace(/bölü/g,'/').replace(/[^0-9+\-*/().]/g,'').trim();
+  if(!e) return null;
+  try{const r=Function('return ('+e+')')(); return Number.isFinite(r)?r:null;}catch{return null;}
+}
+
+let lastTopic='';
+
+function playParkour(){
+  gameCanvas.style.display='block';
+  drawingCanvas.style.display='none';
+  gameCtx.clearRect(0,0,gameCanvas.width,gameCanvas.height);
+  gameCtx.fillStyle='green';
+  gameCtx.fillRect(10,10,50,50);
+  gameCtx.fillStyle='white';
+  gameCtx.fillText('Parkur Başladı! WASD ile hareket et',10,80);
+}
+function closeGame(){
+  gameCanvas.style.display='none';
+  lastTopic='';
+  return 'Oyun kapatıldı ✅';
+}
+
+function startDrawing(){
+  drawingCanvas.style.display='block';
+  gameCanvas.style.display='none';
+  drawCtx.clearRect(0,0,drawingCanvas.width,drawingCanvas.height);
+  drawCtx.fillStyle='pink';
+  drawCtx.fillRect(0,0,drawingCanvas.width,drawingCanvas.height);
+  drawCtx.fillStyle='black';
+  drawCtx.font='16px Arial';
+  drawCtx.fillText('Resim yap! İşin bitince sonucu göreceksin 😉',10,20);
+}
+
+function offlineAI(inputText){
+  const insults=['aptal','salak','geri zekalı','mal','küfür','gerizekalı'];
+  const compliments=['zekisin','harikasın','çok iyisin','efsanesin','süpersin','akıllısın','beni sevdin','beğendim seni'];
+  const t=inputText.toLowerCase().trim();
+  const math=safeMath(t);
+  if(math!==null){lastTopic='math';return `${inputText} = ${math}`;}
+
+  if(t.includes('geçmişsil')){ clearMessages(); lastTopic=''; return 'Chat temizlendi ✅';}
+  if(t.includes('oyun oynayalım')){ playParkour(); lastTopic='game'; return 'Parkur oyunu başlatıldı!';}
+  if(t.includes('oyunu kapat') || t.includes('oyunu bitir')){ return closeGame();}
+  if(t.includes('resim yapalım')){ startDrawing(); lastTopic='drawing'; return 'Resim kapışması başladı!';}
+
+  if(t.includes('yazı')&&t.includes('tura')){ lastTopic='game'; return Math.random()<0.5?'Yazı':'Tura';}
+  if(t.includes('espri')||t.includes('şaka')){ lastTopic='joke'; return jokes[Math.floor(Math.random()*jokes.length)];}
+  if(t.includes('recep tayyip erdoğan') && t.includes('espri')){lastTopic='joke';return 'Tamam 😄 Ama önce ekonomi dersimizi öğrenelim, sonra espri geliyor!';}
+  if(t.includes('selamun aleyküm')){lastTopic='chat';return 'Aleyküm selam! 🙂 Oyun oynamak ister misin? Yazı tura, espri veya bulmaca oynayabiliriz.';}
+  if(t.includes('sana olay anlatacağım')){lastTopic='story';return 'Sabırsızlıkla bekliyorum, anlat lütfen!';}
+  if(t.includes('bulmaca söyle')){lastTopic='puzzle';return puzzles[Math.floor(Math.random()*puzzles.length)];}
+
+  const greetings=['selam','merhaba','hi','hey','naber','ne haber','napıyorsun','napıyon'];
+  if(greetings.some(w=>t.includes(w))){ lastTopic='chat'; return 'İyiyim 🙂 Sen nasılsın? Günün nasıl gidiyor?';}
+  if(t.includes('iyiyim')){ lastTopic='chat'; return 'Buna sevindim 😄 Günün nasıl geçiyor?';}
+  if(t.includes('kötü')){ lastTopic='chat'; return 'Üzüldüm 😔 İstersen biraz konuşalım.';}
+  if(t.includes('nasılsın')){ lastTopic='chat'; return 'İyiyim 🙂 Sen nasılsın?';}
+  if(t.includes('adın ne')){ lastTopic='chat'; return 'Benim adım yasirmat.AI';}
+  if(t.includes('ne yapabilirsin')){ lastTopic='chat'; return 'Seninle sohbet edebilirim, matematik çözebilirim, oyun oynayabilirim, espri yapabilirim ve bulmaca sorabilirim.';}
+  if(t.includes('teşekkür')){ lastTopic='chat'; return 'Rica ederim 😊';}
+  if(compliments.some(w=>t.includes(w))){ lastTopic='chat'; return 'Bu beni çok mutlu etti 😄 Sen de harika birisin, iyi ki varsın!';}
+
+  if(t.includes('her şeyi biliyorum')){ lastTopic='secret'; return '🤫 Tamam… Sakın kimseye söyleme. Peluş oyuncaklarımla oynadığımı aramızda kalsın 😉';}
+  if(insults.some(w=>t.includes(w))){ lastTopic='chat'; return 'Böyle konuşmana üzüldüm 😠 Eğer beni beğenmiyorsan GPT, Gemini, Siri veya Grok kullanabilirsin.';}
+  if(t.includes('sıkıldım')){ lastTopic='chat'; return 'Anladım 🙂 Sohbet edebiliriz, istersen bir soru sor bana.';}
+
+  if(lastTopic==='chat'){ return 'Anlıyorum 👍 Seninle konuşmak güzel, devam edelim mi?';}
+  if(lastTopic==='math'){ return 'İstersen başka bir matematik sorusu da sorabilirsin.';}
+  if(lastTopic==='game'){ return 'Tekrar yazı–tura oynayabiliriz 🙂';}
+  if(lastTopic==='drawing'){ return 'Resim kapışması devam ediyor…';}
+  if(lastTopic==='story'){ return 'Anlattıklarını dikkatle dinliyorum, devam et lütfen.';}
+  if(lastTopic==='puzzle'){ return 'Daha fazla bulmaca ister misin?';}
+
+  if(t.length>0){ lastTopic='chat'; return 'Beni anladım 🙂 Devam etmek ister misin?';}
+  return 'Tam anlayamadım 🤔 Ama sohbet edebiliriz, nasılsın?';
+}
+
+function sendMsg(){
+  const text=input.value.trim();
+  if(!text) return;
+  input.value='';
+  addMsg('Sen: '+text,'user');
+  const reply=offlineAI(text);
+  addMsg('yasirmat.AI: '+reply,'ai');
+}
+
+loadMessages();
+</script>
+</body>
+</html>
